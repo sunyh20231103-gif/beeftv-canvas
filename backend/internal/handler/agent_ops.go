@@ -179,7 +179,28 @@ func resolveCaller(c *gin.Context, svc *app.Service, clients *agentops.ClientReg
 	if trustedDesktopUI(c) {
 		return agentops.Caller{Kind: agentops.CallerManual}, "desktop-ui", nil
 	}
+	// Web 开发模式：来自 BEEFTV_ALLOWED_ORIGINS 中列出的前端源视为受信任的手动 UI。
+	if trustedWebUI(c) {
+		return agentops.Caller{Kind: agentops.CallerManual}, "web-ui", nil
+	}
 	return agentops.Caller{}, "", errUnidentified
+}
+
+// trustedWebUI 判断请求是否来自 BEEFTV_ALLOWED_ORIGINS 中配置的 Web 前端。
+func trustedWebUI(c *gin.Context) bool {
+	if c == nil || c.Request == nil || !isLoopbackRequest(c.Request) {
+		return false
+	}
+	origin := strings.TrimSpace(c.GetHeader("Origin"))
+	if origin == "" {
+		return false
+	}
+	for _, allowed := range allowedOrigins() {
+		if strings.EqualFold(strings.TrimRight(allowed, "/"), strings.TrimRight(origin, "/")) {
+			return true
+		}
+	}
+	return false
 }
 
 func trustedDesktopUI(c *gin.Context) bool {
