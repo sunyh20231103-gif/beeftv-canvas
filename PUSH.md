@@ -3,7 +3,7 @@
 ## 当前状态 ✅
 - origin: https://github.com/sunyh20231103-gif/beeftv-canvas.git ✅
 - upstream: https://github.com/glanderness/BeefTV.git ✅
-- 远程已同步到最新 commit: acdd6c4
+- 远程已同步到最新 commit: 59cecb5
 
 ## 推送命令
 
@@ -11,10 +11,8 @@
 cd F:/Canvas/BeefTV
 git add -A
 git commit -m "描述修改内容"
-git push --force origin main
+git push origin main
 ```
-
-> 使用 `--force` 是因为移除了上游的 workflow 文件，需要覆盖远程。
 
 ## 从官方拉取最新代码
 
@@ -23,7 +21,7 @@ cd F:/Canvas/BeefTV
 git pull upstream main --no-edit
 git add -A
 git commit -m "sync: pull upstream changes"
-git push --force origin main
+git push origin main
 ```
 
 ## 云端部署
