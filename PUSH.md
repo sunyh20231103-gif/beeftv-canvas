@@ -3,7 +3,7 @@
 ## 当前状态 ✅
 - origin: https://github.com/sunyh20231103-gif/beeftv-canvas.git ✅
 - upstream: https://github.com/glanderness/BeefTV.git ✅
-- 远程已同步到最新 commit: 59cecb5
+- 远程已同步到最新 commit: 5a6ef1c
 
 ## 推送命令
 
