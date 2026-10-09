@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $backendDir = Join-Path $repoRoot "backend"
 $webDir = Join-Path $repoRoot "web"
-$dataDir = Join-Path $repoRoot ".local\project-workbench-debug"
+$dataDir = Join-Path $repoRoot "../data"
 $goBuildCache = Join-Path $repoRoot ".local\cache\go-build"
 $goModuleCache = Join-Path $repoRoot ".local\cache\go-mod"
 
