@@ -1,20 +1,9 @@
-# BeefTV Cloud Deploy
-# 触发：push 到 main 分支，或手动触发（workflow_dispatch）
 name: Deploy to Cloud
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      environment:
-        description: '部署环境'
-        required: true
-        default: 'render'
-        type: choice
-        options:
-          - render
-          - flyio
 
 permissions:
   contents: read
@@ -30,10 +19,7 @@ jobs:
 
       - name: Resolve version
         id: version
-        run: |
-          version="$(tr -d '\r\n' < VERSION)"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=${version#v}" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(tr -d '\r\n' < VERSION)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -52,12 +38,11 @@ jobs:
           file: backend/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/beeftv-backend:${{ steps.version.outputs.tag }}
+            ghcr.io/${{ github.repository }}/beeftv-backend:${{ steps.version.outputs.version }}
             ghcr.io/${{ github.repository }}/beeftv-backend:latest
           build-args: |
             BUILD_VERSION=${{ steps.version.outputs.version }}
             BUILD_COMMIT=${{ github.sha }}
-            BUILD_TIME=${{ github.event.head_commit.timestamp }}
 
       - name: Build and push web image
         uses: docker/build-push-action@v6
@@ -66,38 +51,7 @@ jobs:
           file: Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/beeftv-web:${{ steps.version.outputs.tag }}
+            ghcr.io/${{ github.repository }}/beeftv-web:${{ steps.version.outputs.version }}
             ghcr.io/${{ github.repository }}/beeftv-web:latest
           build-args: |
             BUILD_VERSION=${{ steps.version.outputs.version }}
-
-  deploy-render:
-    name: Deploy to Render
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
-    steps:
-      - name: Deploy to Render API
-        env:
-          RENDER_API_TOKEN: ${{ secrets.RENDER_API_TOKEN }}
-        run: |
-          # 触发 Render 重新构建服务
-          curl -X POST \
-            -H "Authorization: Bearer $RENDER_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            "https://api.render.com/v1/services" \
-            --data '{"filter":{"name":"beeftv-backend"}}'
-
-  deploy-flyio:
-    name: Deploy to Fly.io
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.event.inputs.environment == 'flyio'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Deploy to Fly.io
-        uses: fly-apps/github-action@v2
-        with:
-          fly-api-token: ${{ secrets.FLY_API_TOKEN }}
-          app: beeftv-canvas
