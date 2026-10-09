@@ -1,0 +1,42 @@
+services:
+  - type: web
+    name: beeftv-backend
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    buildCommand: docker build -t $RENDER_SERVICE_NAME -f backend/Dockerfile .
+    startCommand: /usr/local/bin/infinite-canvas-backend
+    envVars:
+      - key: GIN_MODE
+        value: release
+      - key: CANVAS_BACKEND_ADDR
+        value: :8080
+      - key: CANVAS_BACKEND_DATA_DIR
+        value: /data
+      - key: CANVAS_AUTO_MIGRATE
+        value: "true"
+      - key: CANVAS_DATABASE_DRIVER
+        value: sqlite
+      - key: CANVAS_CORS_ORIGINS
+        value: https://beeftv-*.onrender.com
+      - key: BEEFTV_ALLOWED_ORIGINS
+        value: https://beeftv-*.onrender.com
+      - key: BEEFTV_UI_BOOTSTRAP
+        value: "1"
+      - key: CANVAS_SHUTDOWN_TIMEOUT
+        value: 10m
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
+
+  - type: web
+    name: beeftv-nginx
+    env: docker
+    dockerfilePath: ./Dockerfile
+    buildCommand: docker build -t $RENDER_SERVICE_NAME .
+    startCommand: nginx -g "daemon off;"
+    envVars:
+      - key: CANVAS_IMAGE_TAG
+        value: latest
+    domains:
+      - beeftv.onrender.com

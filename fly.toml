@@ -1,0 +1,47 @@
+# Fly.io 部署配置
+# 免费版：3 台共享 CPU VM（免费额度内）
+# 需要付费存储约 $0.50/月
+
+app = "beeftv-canvas"
+primary_region = "hkg"  # 香港，访问速度快
+
+[build]
+  dockerfile = "backend/Dockerfile"
+  args = [
+    "BUILD_VERSION=1.7.14",
+    "BUILD_COMMIT=cloud",
+    "BUILD_TIME=2026-01-01T00:00:00Z"
+  ]
+
+[env]
+  GIN_MODE = "release"
+  CANVAS_BACKEND_ADDR = ":8080"
+  CANVAS_BACKEND_DATA_DIR = "/data"
+  CANVAS_AUTO_MIGRATE = "true"
+  CANVAS_DATABASE_DRIVER = "sqlite"
+  CANVAS_CORS_ORIGINS = ""
+  BEEFTV_ALLOWED_ORIGINS = ""
+  BEEFTV_UI_BOOTSTRAP = "1"
+  CANVAS_SHUTDOWN_TIMEOUT = "10m"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"   # 免费额度内保持运行
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 100
+    soft_limit = 50
+
+[[mounts]]
+  source = "beeftv_data"
+  destination = "/data"
+  size_gb = 1
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

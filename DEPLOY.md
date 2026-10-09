@@ -1,4 +1,4 @@
-# BeefTV Canvas 远程部署说明
+# BeefTV Canvas 部署指南
 
 ## 仓库结构（Fork 模式）
 
@@ -7,132 +7,169 @@ upstream  → https://github.com/glanderness/BeefTV.git   （上游官方仓库�
 origin    → 你自己的 GitHub 仓库（待配置）
 ```
 
-## 后续操作
+---
 
-### 1. 推送代码到你的 GitHub
+## 一、推送代码到你的 GitHub
 
-替换 `YOUR_USERNAME` 为你的 GitHub 用户名，然后执行：
+### 1. 在 GitHub 创建新仓库
+
+访问 https://github.com/new，创建仓库（例如：`yourname/beeftv-canvas`），不要初始化 README。
+
+### 2. 添加 origin remote 并推送
 
 ```powershell
-# 在你的 GitHub 创建空仓库，例如：yourname/beeftv-canvas
 cd F:/Canvas/BeefTV
+
+# 添加你的 GitHub 仓库
 git remote add origin https://github.com/YOUR_USERNAME/beeftv-canvas.git
-git branch -M main
+
+# 推送到你的仓库
 git push -u origin main
 ```
 
-### 2. 从上游拉取更新
+### 3. 本地更新命令
 
 ```powershell
+# 从官方拉取最新代码（保留本地修改）
 cd F:/Canvas/BeefTV
-git pull upstream main          # 拉取官方最新代码
-# 如有冲突，解决后：git push origin main
+.\scripts\update.ps1
+
+# 推送到你的 GitHub
+.\scripts\push-to-origin.ps1
 ```
 
 ---
 
-## 云服务器部署脚本
+## 二、云端部署（免费方案）
 
-将以下脚本保存到云服务器的 `/opt/beeftv/deploy.sh`，然后执行。
+### 方案 A：Render.com（推荐，全免费）
 
-服务器需要安装：Go 1.25+、Node.js 20+、Git、Systemd
+**优点**：永久免费、无需信用卡、GitHub 一键部署  
+**限制**：90 天无流量会自动暂停（访问即恢复）
 
-```bash
-#!/bin/bash
-set -e
+#### 步骤
 
-REPO_DIR="/opt/beeftv"
-DATA_DIR="/opt/beeftv/data"
-LOG_FILE="/opt/beeftv/logs/app.log"
-FRONTEND_PORT=3000
-BACKEND_PORT=8080
+1. **注册 Render**：https://dashboard.render.com，用 GitHub 登录
 
-# 创建目录
-mkdir -p "$REPO_DIR" "$DATA_DIR" "$(dirname $LOG_FILE)"
+2. **部署 Backend**（SQLite + Go）：
+   ```
+   New → Web Service
+   Repository: yourname/beeftv-canvas
+   Root Directory: backend
+   Build Command: go build -o bin/server ./cmd/server
+   Start Command: ./bin/server
+   Environment Variables:
+     GIN_MODE = release
+     CANVAS_BACKEND_ADDR = :8080
+     CANVAS_BACKEND_DATA_DIR = /data
+     CANVAS_AUTO_MIGRATE = true
+     CANVAS_DATABASE_DRIVER = sqlite
+     CANVAS_CORS_ORIGINS = https://your-domain.onrender.com
+     BEEFTV_ALLOWED_ORIGINS = https://your-domain.onrender.com
+     BEEFTV_UI_BOOTSTRAP = 1
+   Disk: Mount at /data, size 1GB
+   ```
 
-# 克隆仓库（替换为你的 origin）
-if [ ! -d "$REPO_DIR/.git" ]; then
-  git clone https://github.com/YOUR_USERNAME/beeftv-canvas.git "$REPO_DIR"
-fi
-cd "$REPO_DIR"
-git pull origin main
+3. **部署 Frontend**（静态文件）：
+   ```
+   New → Static Site
+   Repository: yourname/beeftv-canvas
+   Publish Directory: web/dist
+   Build Command: bun install && bun run build
+   ```
 
-# 编译后端
-cd "$REPO_DIR/backend"
-CGO_ENABLED=0 go build -o "$REPO_DIR/beeftv-server.exe" ./cmd/server
+4. **连接域名**（可选）：在 Render 设置中添加自定义域名
 
-# 安装前端依赖
-cd "$REPO_DIR/web"
-bun install 2>/dev/null || npm install 2>/dev/null
+#### 自动部署（GitHub Actions）
 
-# 创建 systemd 服务
-cat > /etc/systemd/system/beeftv-backend.service << 'EOF'
-[Unit]
-Description=BeefTV Backend
-After=network.target
+已配置 `.github/workflows/deploy-cloud.yml`：
+- 推送 `main` 分支时自动构建 Docker 镜像到 GHCR
+- 需要配置 `RENDER_API_TOKEN` 或 `FLY_API_TOKEN` 才能自动触发部署
 
-[Service]
-Environment="CANVAS_OFFICIAL_PLUGIN_DIR=/opt/beeftv/BeefTV-app/plugin-packages"
-Environment="CANVAS_CORS_ORIGINS=http://localhost:$FRONTEND_PORT"
-Environment="BEEFTV_ALLOWED_ORIGINS=http://localhost:$FRONTEND_PORT"
-Environment="BEEFTV_UI_BOOTSTRAP=1"
-ExecStart=/opt/beeftv/beeftv-server.exe
-WorkingDirectory=/opt/beeftv
-Restart=always
-RestartSec=5
+---
 
-[Install]
-WantedBy=multi-user.target
-EOF
+### 方案 B：Fly.io（推荐，有持久化存储）
 
-cat > /etc/systemd/system/beeftv-frontend.service << 'EOF'
-[Unit]
-Description=BeefTV Frontend
-After=network.target
+**优点**：免费额度内持久运行、有持久化磁盘、SST 自动恢复  
+**限制**：需要绑定信用卡、存储费用约 $0.5/月
 
-[Service]
-WorkingDirectory=/opt/beeftv/BeefTV/web
-ExecStart=bun run dev -- --host 0.0.0.0 --port $FRONTEND_PORT
-Restart=always
-RestartSec=5
+#### 步骤
 
-[Install]
-WantedBy=multi-user.target
-EOF
+1. **安装 Fly CLI**：
+   ```bash
+   # Windows
+   winget install fly.io
+   
+   # 或从 https://fly.io/docs/hands-on/ 下载安装
+   ```
 
-systemctl daemon-reload
-systemctl enable beeftv-backend beeftv-frontend
-systemctl restart beeftv-backend beeftv-frontend
-echo "Deployed! Backend: http://YOUR_SERVER_IP:$BACKEND_PORT"
-echo "            Frontend: http://YOUR_SERVER_IP:$FRONTEND_PORT"
-```
+2. **登录并初始化**：
+   ```bash
+   fly auth login
+   fly apps create beeftv-canvas --region hkg
+   ```
 
-### 部署步骤（在云服务器上）
+3. **部署**：
+   ```bash
+   cd F:/Canvas/BeefTV
+   fly deploy
+   ```
 
-```bash
-# 1. 安装依赖（Ubuntu/Debian）
-apt-get update && apt-get install -y golang-go nodejs npm git
-# Node.js 需要 >=20，建议用 nvm 安装
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-source ~/.bashrc && nvm install 20
-npm install -g bun
+4. **验证**：
+   ```bash
+   fly status
+   fly logs
+   ```
 
-# 2. 克隆并准备 BeefTV-app（包含 plugin-packages）
-#    在本地已解压的 BeefTV-app 目录复制到服务器 /opt/beeftv/
+---
 
-# 3. 执行部署脚本
-chmod +x /opt/beeftv/deploy.sh
-/opt/beeftv/deploy.sh
+## 三、本地开发（当前环境）
 
-# 4. 开放防火墙端口
-ufw allow 3000/tcp
-ufw allow 8080/tcp
+| 服务 | 地址 | 状态 |
+|------|------|------|
+| 前端 (Vite) | http://localhost:3000 | ✅ |
+| 后端 (Go) | http://127.0.0.1:8080 | ✅ |
+
+**环境变量**：
+```powershell
+$env:CANVAS_OFFICIAL_PLUGIN_DIR = "F:/Canvas/BeefTV-app/plugin-packages"
+$env:CANVAS_CORS_ORIGINS = "http://localhost:3000"
+$env:BEEFTV_ALLOWED_ORIGINS = "http://localhost:3000"
+$env:BEEFTV_UI_BOOTSTRAP = "1"
 ```
 
 ---
 
-## 当前本地状态
+## 四、升级流程
 
-- 前端（Vite）：http://localhost:3000 ✅
-- 后端（Go）：http://127.0.0.1:8080 ✅
-- 已保留修改：agent_ops.go（trustedWebUI）、go.mod（glebarez/sqlite）
+```powershell
+# 1. 从官方拉取最新代码
+cd F:/Canvas/BeefTV
+git pull upstream main
+
+# 2. 重新编译（仅后端需要）
+cd backend
+$env:CGO_ENABLED = "0"
+& "$env:TEMP\go\go\bin\go.exe" build -o "../beeftv-server.exe" "./cmd/server"
+
+# 3. 重启后端服务
+# （停止当前进程，重新启动）
+
+# 4. 推送到你的 GitHub
+git add -A
+git commit -m "chore: sync upstream v1.x.x"
+git push origin main
+```
+
+---
+
+## 五、注意事项
+
+1. **助手功能**：由于 `@earendil-works/pi-coding-agent` 与 Node.js v24 不兼容，
+   助手功能暂时不可用。画布保存和生图功能正常工作。
+
+2. **生图问题**："excessive system load" 是上游中转服务过载，重试即可。
+
+3. **数据库迁移**：首次启动时后端会自动迁移数据库 schema，无需手动操作。
+
+4. **配置文件**：`F:/Canvas/data/agent_config.json` 配置助手启动命令。
