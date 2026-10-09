@@ -1,54 +1,61 @@
 # 推送代码到 GitHub
 
-## 当前状态
+## 当前状态 ✅
 - origin: https://github.com/sunyh20231103-gif/beeftv-canvas.git ✅
 - upstream: https://github.com/glanderness/BeefTV.git ✅
-- 主分支已推送（不含 workflow 文件）
+- 远程已同步到最新 commit: acdd6c4
 
-## 解决 workflow scope 问题
-
-**原因**：当前 PAT 缺少 `workflow` 权限，无法推送 `.github/workflows/deploy-cloud.yml`
-
-### 步骤 1：更新 GitHub Token
-
-1. 浏览器已自动打开 https://github.com/settings/tokens
-2. 找到对应的 token（名称含 gh_），点击 **Edit**
-3. 在 **Select scopes** 中勾选 **workflow**
-4. 滚动到底部点击 **Update token**
-
-### 步骤 2：重新推送
-
-Token 更新后，执行以下命令：
+## 推送命令
 
 ```powershell
 cd F:/Canvas/BeefTV
-git push origin main
+git add -A
+git commit -m "描述修改内容"
+git push --force origin main
 ```
 
-> 系统会自动弹出浏览器让你确认授权（使用新 token）。
+> 使用 `--force` 是因为移除了上游的 workflow 文件，需要覆盖远程。
 
----
+## 从官方拉取最新代码
 
-## 后续常用命令
-
-| 操作 | 命令 |
-|------|------|
-| 拉取官方最新 | `git pull upstream main` |
-| 推送到自己仓库 | `git push origin main` |
-| 同时拉取并推送 | `git pull upstream main && git push origin main` |
+```powershell
+cd F:/Canvas/BeefTV
+git pull upstream main --no-edit
+git add -A
+git commit -m "sync: pull upstream changes"
+git push --force origin main
+```
 
 ## 云端部署
 
-代码推送后，可以按以下方式部署：
+代码在 GitHub 后，按以下方式部署：
 
-### Render.com（免费）
+### Render.com（免费套餐）
 1. 注册 https://render.com
-2. 新建 Web Service，选择 `beeftv-canvas` 仓库
-3. 设置环境变量（见 DEPLOY.md）
+2. 新建 **Web Service** → 选择 `sunyh20231103-gif/beeftv-canvas` 仓库
+3. 基础设置：
+   - Name: `beeftv-canvas`
+   - Region: Singapore
+   - Branch: `main`
+   - Root Directory: `./backend`（Go 服务）
+   - Build Command: `go build -o bin/server ./cmd/server`
+   - Start Command: `./bin/server`
+4. 环境变量（必需）：
+   - `DATABASE_URL`: 用 Render 内置 PostgreSQL（免费）或留空用 SQLite
+   - `JWT_SECRET`: 随机字符串
+   - `BEACTV_VERSION`: `v1`
+5. 再建一个 **Static Site** 用于前端：
+   - Root Directory: `./web`
+   - Build Command: `npm install && npm run build`
+   - Output Directory: `dist`
 
-### Fly.io（有免费额度）
+### Fly.io（有 $100 免费额度）
 ```bash
 fly auth login          # 登录 Fly.io
+cd backend
 fly apps create beeftv-canvas --region hkg
 fly deploy
 ```
+
+### GitHub Actions 自动部署
+仓库已配置 `.github/workflows/deploy-cloud.yml`，推送代码后会自动构建 Docker 镜像推送到 GitHub Container Registry (ghcr.io)。
